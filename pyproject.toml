@@ -1,0 +1,29 @@
+[project]
+name = "patterns"
+version = "0.1.0"
+description = "k-NN price-pattern research and paper-trading system with a conservative validation layer"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "pandas",
+    "typer",
+    "pyyaml",
+    "matplotlib",
+    "alpaca-py",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+patterns = "patterns.cli:app"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["patterns*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

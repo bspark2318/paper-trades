@@ -1,0 +1,28 @@
+# All parameters live here — never hardcoded. Fields marked [identity] define the
+# config hash recorded in the multiple-testing ledger: changing one creates a new
+# config and raises the Bonferroni bar for everyone.
+
+symbols: [QQQ]            # [identity] single symbol by design; benchmark = buy-and-hold of it
+timeframe: 1Min           # [identity] bar size
+window: 30                # [identity] pattern window length, in bars (30 x 1Min = 30 minutes)
+horizon: 15               # [identity] forward-return horizon, in bars
+k: 50                     # [identity] nearest neighbours requested (before dedup)
+dedup_gap: 15             # [identity] matches within this many bars are one event
+p_threshold: 0.65         # [identity] min fraction of positive-match outcomes for a LONG
+t_multiplier: 1.5         # [identity] mean fwd return must beat this x unconditional mean
+min_matches: 20           # [identity] min deduped matches, else NO_TRADE
+min_history_bars: 35000   # [identity] warm-up before first walk-forward signal (~90 sessions)
+normalization: logret_zscore  # [identity] pluggable shape definition
+enable_shorts: false      # [identity]
+cost_bps: 5.0             # [identity] per side, deliberately pessimistic for intraday
+split_date: "2022-12-31"  # [identity] train <= this date < test
+query_stride: 1           # [identity] walk-forward queries every Nth bar
+
+# Execution plumbing — NOT part of the hypothesis, excluded from the config hash.
+position_size: 0.10       # fraction of paper equity per trade (one position at a time)
+force_flat_minutes_before_close: 5
+seed: 42                  # baselines randomness only; strategy itself is deterministic
+db_path: db/patterns.db
+reports_dir: reports
+block_size: 1024          # matcher GEMM query-block rows
+candidate_chunk: 65536    # matcher GEMM candidate-chunk columns
