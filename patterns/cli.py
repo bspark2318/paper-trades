@@ -106,6 +106,101 @@ def match(
 
 
 @app.command()
+def backtest(
+    set_: list[str] = typer.Option([], "--set", help="Override key=value"),
+    config_path: str = typer.Option("config.yaml", "--config"),
+    resamples: int = typer.Option(1000, "--resamples", help="Random-baseline resamples"),
+) -> None:
+    """Walk-forward backtest on TRAIN data only. Registers in the ledger first —
+    a crashed run still counts toward N."""
+    from patterns import db as dbm
+    from patterns import plotting
+    from patterns.data import store
+    from patterns.validate import baselines, ledger
+    from patterns.validate.walkforward import run_walkforward
+    from patterns.strategy.base import Direction
+
+    cfg = load_config(config_path, parse_set_overrides(set_))
+    sym = cfg.symbols[0]
+    conn = dbm.connect(cfg.db_path)
+    typer.echo(dbm.report_banner(conn))
+
+    bars = store.load_bars(conn, sym, end_ts=f"{cfg.split_date}T23:59:59Z")
+    if bars.empty:
+        typer.echo(f"{sym}: no train bars (split {cfg.split_date}) — run `patterns data refresh`", err=True)
+        raise typer.Exit(1)
+
+    # On the record BEFORE any computation.
+    dbm.register_config(conn, cfg.config_hash, cfg.identity_json())
+    run_id = dbm.start_run(conn, "backtest", cfg.config_hash, seed=cfg.seed)
+
+    try:
+        res = run_walkforward(cfg, bars)
+        m = dict(res.metrics)
+        decisions = [s.asof for s in res.signals if s.direction is Direction.LONG]
+        if decisions:
+            rb = baselines.random_baseline(
+                bars, decisions, m["mean_net_ret"], cfg.horizon, cfg.cost_bps,
+                cfg.min_history_bars, n_resamples=resamples, seed=cfg.seed,
+            )
+            m["p_random"] = rb.p_value
+        bh = baselines.buy_and_hold(bars, cfg.cost_bps)
+        m["bh_total_return"] = bh.total_return
+        m["bh_sharpe"] = bh.sharpe
+    except BaseException:
+        dbm.finish_run(conn, run_id, status="crashed")
+        raise
+    ledger.save_trades(conn, run_id, sym, res.trades)
+    dbm.finish_run(conn, run_id, status="ok", metrics=m)
+
+    n = dbm.n_configs_tried(conn)
+    a = ledger.alpha(n)
+    png = plotting.plot_equity(res.equity_ts, res.equity,
+                               f"{cfg.reports_dir}/equity_{cfg.config_hash}.png",
+                               title=f"walk-forward equity — {cfg.config_hash} (train)")
+
+    typer.echo(f"\nconfig {cfg.config_hash} | TRAIN ≤ {cfg.split_date} | "
+               f"{m['n_sessions']} sessions | run #{run_id}")
+    typer.echo(f"signals: {m['n_signals']:,} queried, {m['n_long_signals']} LONG")
+    typer.echo(f"trades:  {m['n_trades']} | hit rate {m['hit_rate']:.0%} | "
+               f"mean net/trade {m['mean_net_ret']:+.4%}" if m["n_trades"]
+               else "trades:  0 — nothing cleared the rule")
+    if m["n_trades"]:
+        typer.echo(f"total return {m['total_return']:+.2%} | sharpe {m['sharpe']:.2f} | "
+                   f"max DD {m['max_drawdown']:.2%}")
+        typer.echo(f"vs random (TOD-matched, {resamples} resamples): p = {m.get('p_random', float('nan')):.4f}")
+    typer.echo(f"vs buy-and-hold: {m['bh_total_return']:+.2%} (sharpe {m['bh_sharpe']:.2f})")
+    typer.echo(f"\nledger: N = {n} configs tried → survivor needs p < {a:.2e}")
+    typer.echo(f"NOTE: paper fills are optimistic — read all numbers as upper bounds.")
+    typer.echo(f"saved: {png}")
+
+
+@app.command()
+def ledger(
+    config_path: str = typer.Option("config.yaml", "--config"),
+) -> None:
+    """Every hypothesis ever tried, and what the bar for belief now is."""
+    from patterns import db as dbm
+    from patterns.validate import ledger as ledger_mod
+
+    cfg = load_config(config_path)
+    conn = dbm.connect(cfg.db_path)
+    typer.echo(dbm.report_banner(conn))
+
+    rows = ledger_mod.ledger_rows(conn)
+    if not rows:
+        typer.echo("ledger empty — no backtests recorded yet")
+        return
+    typer.echo(f"\n{'hash':12}  {'runs':>4}  {'trades':>6}  {'mean net':>9}  {'p_random':>8}  candidate")
+    for r in rows:
+        mean = f"{r.mean_net_ret:+.4%}" if r.mean_net_ret is not None else "—"
+        p = f"{r.p_random:.4f}" if r.p_random is not None else "—"
+        trades = str(r.n_trades) if r.n_trades is not None else "—"
+        typer.echo(f"{r.config_hash:12}  {r.n_runs:>4}  {trades:>6}  {mean:>9}  {p:>8}  "
+                   f"{'YES' if r.candidate else 'no'}")
+
+
+@app.command()
 def config(
     set_: list[str] = typer.Option([], "--set", help="Override key=value"),
     config_path: str = typer.Option("config.yaml", "--config"),

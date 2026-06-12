@@ -194,9 +194,10 @@ def finish_run(conn: sqlite3.Connection, run_id: int, status: str = "ok", metric
 
 
 def n_configs_tried(conn: sqlite3.Connection) -> int:
-    """Bonferroni N: distinct config hashes with at least one completed train backtest."""
+    """Bonferroni N: distinct config hashes with at least one backtest ATTEMPT.
+    Crashed runs count — the hypothesis was spent even if no result was seen."""
     row = conn.execute(
-        "SELECT COUNT(DISTINCT config_hash) FROM runs WHERE run_type = 'backtest' AND status = 'ok'"
+        "SELECT COUNT(DISTINCT config_hash) FROM runs WHERE run_type = 'backtest'"
     ).fetchone()
     return int(row[0])
 
