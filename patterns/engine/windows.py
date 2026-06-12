@@ -48,13 +48,24 @@ class WindowSet:
         return int(pos)
 
 
+FEATURES_PER_BAR = {"close": 1, "ohlc": 4}
+
+
 def build_windows(bars: pd.DataFrame, window: int, horizon: int,
-                  normalization: str = "logret_zscore") -> WindowSet:
-    """bars: time-ordered RTH bars (ts UTC, close). Sessions inferred from NY dates."""
+                  normalization: str = "logret_zscore", features: str = "close") -> WindowSet:
+    """bars: time-ordered RTH bars (ts UTC, ohlc). Sessions inferred from NY dates.
+
+    features="close": each bar contributes one log-return → W values per window.
+    features="ohlc": each bar contributes log(o/h/l/c vs previous close) → 4W values;
+    wicks and bodies become part of the shape.
+    """
+    if features not in FEATURES_PER_BAR:
+        raise ValueError(f"Unknown features {features!r}; available: {sorted(FEATURES_PER_BAR)}")
     # Internally timestamps are UTC-naive datetime64 (numpy-friendly);
     # the matcher converts back to tz-aware UTC at its API boundary.
     ts = bars["ts"].dt.tz_convert("UTC").dt.tz_localize(None).to_numpy()
-    closes = bars["close"].to_numpy(dtype=np.float64)
+    ohlc = {col: bars[col].to_numpy(dtype=np.float64) for col in ("open", "high", "low", "close")}
+    closes = ohlc["close"]
     session_label = bars["ts"].dt.tz_convert(NY).dt.date.to_numpy()
 
     rows, end_idx, fwd = [], [], []
@@ -62,7 +73,7 @@ def build_windows(bars: pd.DataFrame, window: int, horizon: int,
     n = len(bars)
     for i in range(1, n + 1):
         if i == n or session_label[i] != session_label[start]:
-            _collect_session(closes, start, i, window, horizon, rows, end_idx, fwd)
+            _collect_session(ohlc, start, i, window, horizon, features, rows, end_idx, fwd)
             start = i
 
     if rows:
@@ -70,7 +81,7 @@ def build_windows(bars: pd.DataFrame, window: int, horizon: int,
         end_idx_arr = np.asarray(end_idx, dtype=np.int64)
         fwd_arr = np.asarray(fwd, dtype=np.float64)
     else:
-        X = np.empty((0, window))
+        X = np.empty((0, window * FEATURES_PER_BAR[features]))
         end_idx_arr = np.empty(0, dtype=np.int64)
         fwd_arr = np.empty(0)
 
@@ -88,16 +99,26 @@ def build_windows(bars: pd.DataFrame, window: int, horizon: int,
     )
 
 
-def _collect_session(closes, lo, hi, window, horizon, rows, end_idx, fwd):
+def _collect_session(ohlc, lo, hi, window, horizon, features, rows, end_idx, fwd):
     """Append all windows of one session [lo, hi) to the accumulators."""
+    closes = ohlc["close"]
     n = hi - lo
     if n - 1 < window:  # need W returns, i.e. W+1 closes
         return
-    r = np.diff(np.log(closes[lo:hi]))                       # (n-1,)
-    X = np.lib.stride_tricks.sliding_window_view(r, window)  # (n-window, window)
-    # row j covers returns r[j .. j+window-1] → ends at local close j+window
+    prev_close = closes[lo:hi - 1]
+    if features == "close":
+        F = np.log(closes[lo + 1:hi] / prev_close)[:, None]   # (n-1, 1)
+    else:  # ohlc: each bar located relative to the previous close
+        F = np.stack(
+            [np.log(ohlc[c][lo + 1:hi] / prev_close) for c in ("open", "high", "low", "close")],
+            axis=1,
+        )                                                     # (n-1, 4)
+    # all windows of `window` consecutive bars; flatten bar-major → (n-window, window*nf)
+    X = np.lib.stride_tricks.sliding_window_view(F, window, axis=0)  # (n-window, nf, window)
+    X = X.transpose(0, 2, 1).reshape(X.shape[0], -1)
+    # row j covers bars j+1 .. j+window → ends at local close j+window
     local_end = np.arange(window, n)
-    rows.append(X.copy())
+    rows.append(np.ascontiguousarray(X))
     end_idx.extend(lo + local_end)
     # forward return only if the full horizon stays inside this session
     fwd_ok = local_end + horizon <= n - 1

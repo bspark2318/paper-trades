@@ -54,6 +54,36 @@ def test_fwd_nan_at_session_close_boundary():
     assert per_session_nan == 2 * H  # last H windows of each session
 
 
+# ---------- features ----------
+
+def test_ohlc_window_width_and_alignment():
+    bars = make_session_bars("2024-03-04", n_bars=12)
+    ws = build_windows(bars, window=W, horizon=H, features="ohlc")
+    assert ws.Z.shape[1] == 4 * W
+    # same window count, end indices and forward returns as close-only
+    ws_c = build_windows(bars, window=W, horizon=H, features="close")
+    assert list(ws.end_idx) == list(ws_c.end_idx)
+    np.testing.assert_allclose(ws.fwd_ret, ws_c.fwd_ret, equal_nan=True)
+
+
+def test_ohlc_sees_wick_close_only_cannot():
+    bars = make_session_bars("2024-03-04", n_bars=20)
+    spiked = bars.copy()
+    spiked.loc[10, "high"] = spiked.loc[10, "high"] * 1.05  # huge upper wick, closes untouched
+    z_close = build_windows(bars, window=W, horizon=H, features="close").Z
+    z_close_spiked = build_windows(spiked, window=W, horizon=H, features="close").Z
+    np.testing.assert_allclose(z_close, z_close_spiked)      # close-only is blind to the wick
+    z_ohlc = build_windows(bars, window=W, horizon=H, features="ohlc").Z
+    z_ohlc_spiked = build_windows(spiked, window=W, horizon=H, features="ohlc").Z
+    assert not np.allclose(z_ohlc, z_ohlc_spiked)            # ohlc sees it
+
+
+def test_unknown_features_rejected():
+    bars = make_session_bars("2024-03-04", n_bars=12)
+    with pytest.raises(ValueError, match="vibes"):
+        build_windows(bars, window=W, horizon=H, features="vibes")
+
+
 # ---------- normalization ----------
 
 def test_price_level_invariance():

@@ -6,12 +6,13 @@ symbols: [QQQ]            # [identity] single symbol by design; benchmark = buy-
 timeframe: 1Min           # [identity] bar size
 window: 30                # [identity] pattern window length, in bars (30 x 1Min = 30 minutes)
 horizon: 15               # [identity] forward-return horizon, in bars
-k: 50                     # [identity] nearest neighbours requested (before dedup)
+k: 100                    # [identity] nearest neighbours requested (before dedup)
 dedup_gap: 15             # [identity] matches within this many bars are one event
 p_threshold: 0.65         # [identity] min fraction of positive-match outcomes for a LONG
 t_multiplier: 1.5         # [identity] mean fwd return must beat this x unconditional mean
 min_matches: 20           # [identity] min deduped matches, else NO_TRADE
 min_history_bars: 35000   # [identity] warm-up before first walk-forward signal (~90 sessions)
+features: close           # [identity] close = line through closes; ohlc = full candles (4 values/bar)
 normalization: logret_zscore  # [identity] pluggable shape definition
 enable_shorts: false      # [identity]
 cost_bps: 5.0             # [identity] per side, deliberately pessimistic for intraday

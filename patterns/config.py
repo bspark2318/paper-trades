@@ -27,6 +27,7 @@ IDENTITY_FIELDS = (
     "t_multiplier",
     "min_matches",
     "min_history_bars",
+    "features",
     "normalization",
     "enable_shorts",
     "cost_bps",
@@ -47,6 +48,7 @@ class Config:
     t_multiplier: float = 1.5
     min_matches: int = 20
     min_history_bars: int = 35000
+    features: str = "close"
     normalization: str = "logret_zscore"
     enable_shorts: bool = False
     cost_bps: float = 5.0
