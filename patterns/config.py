@@ -15,29 +15,47 @@ from pathlib import Path
 
 import yaml
 
-# Fields that define a hypothesis. Changing any of these is a new config in the ledger.
-IDENTITY_FIELDS = (
+# A hypothesis = shared experiment conditions + the active signal source's own knobs.
+# Fields a source does NOT read are excluded from its hash: tweaking `k` must not
+# mint a new ledger entry for a source that never looks at `k`.
+SHARED_IDENTITY_FIELDS = (
     "symbols",
     "timeframe",
-    "window",
     "horizon",
-    "k",
-    "dedup_gap",
-    "p_threshold",
-    "t_multiplier",
-    "min_matches",
     "min_history_bars",
-    "features",
-    "normalization",
     "enable_shorts",
     "cost_bps",
     "split_date",
     "query_stride",
+    "signal_source",
 )
+
+# Canonical per-source identity declarations. Signal source classes in
+# patterns/strategy declare the same tuple and registration asserts they match —
+# config stays import-cycle-free while drift fails loudly.
+SOURCE_IDENTITY_FIELDS: dict[str, tuple[str, ...]] = {
+    "knn_shape": (
+        "window",
+        "k",
+        "dedup_gap",
+        "p_threshold",
+        "t_multiplier",
+        "min_matches",
+        "features",
+        "normalization",
+    ),
+}
+
+
+def identity_fields_for(source: str) -> tuple[str, ...]:
+    if source not in SOURCE_IDENTITY_FIELDS:
+        raise KeyError(f"Unknown signal_source {source!r}; available: {sorted(SOURCE_IDENTITY_FIELDS)}")
+    return SHARED_IDENTITY_FIELDS + SOURCE_IDENTITY_FIELDS[source]
 
 
 @dataclass(frozen=True)
 class Config:
+    signal_source: str = "knn_shape"
     symbols: tuple[str, ...] = ("QQQ",)
     timeframe: str = "1Min"
     window: int = 30
@@ -66,7 +84,7 @@ class Config:
 
     def identity_dict(self) -> dict:
         d = {}
-        for f in IDENTITY_FIELDS:
+        for f in identity_fields_for(self.signal_source):
             v = getattr(self, f)
             d[f] = list(v) if isinstance(v, tuple) else v
         return d

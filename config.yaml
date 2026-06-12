@@ -2,6 +2,8 @@
 # config hash recorded in the multiple-testing ledger: changing one creates a new
 # config and raises the Bonferroni bar for everyone.
 
+signal_source: knn_shape  # [identity] which pattern definition emits signals; its declared
+                          #   fields below join the hash, others are ignored for that source
 symbols: [QQQ]            # [identity] single symbol by design; benchmark = buy-and-hold of it
 timeframe: 1Min           # [identity] bar size
 window: 30                # [identity] pattern window length, in bars (30 x 1Min = 30 minutes)

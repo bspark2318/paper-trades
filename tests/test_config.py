@@ -2,7 +2,14 @@ import dataclasses
 
 import pytest
 
-from patterns.config import IDENTITY_FIELDS, Config, load_config, parse_set_overrides, with_overrides
+from patterns.config import (
+    SOURCE_IDENTITY_FIELDS,
+    Config,
+    identity_fields_for,
+    load_config,
+    parse_set_overrides,
+    with_overrides,
+)
 
 
 def test_hash_stable_default():
@@ -16,7 +23,7 @@ def test_hash_insensitive_to_plumbing():
         assert dataclasses.replace(base, **{field: value}).config_hash == base.config_hash, field
 
 
-@pytest.mark.parametrize("field", IDENTITY_FIELDS)
+@pytest.mark.parametrize("field", [f for f in identity_fields_for("knn_shape") if f != "signal_source"])
 def test_hash_sensitive_to_every_identity_field(field):
     base = Config()
     value = getattr(base, field)
@@ -31,6 +38,20 @@ def test_hash_sensitive_to_every_identity_field(field):
     else:
         new = value + "_x"
     assert dataclasses.replace(base, **{field: new}).config_hash != base.config_hash
+
+
+def test_hash_ignores_fields_foreign_to_active_source(monkeypatch):
+    """A knob the active source never reads must not mint a new ledger entry."""
+    monkeypatch.setitem(SOURCE_IDENTITY_FIELDS, "dummy", ("window",))
+    base = dataclasses.replace(Config(), signal_source="dummy")
+    assert dataclasses.replace(base, k=999).config_hash == base.config_hash          # k foreign
+    assert dataclasses.replace(base, window=60).config_hash != base.config_hash      # window declared
+    assert dataclasses.replace(base, cost_bps=9.9).config_hash != base.config_hash   # shared always counts
+
+
+def test_unknown_signal_source_rejected():
+    with pytest.raises(KeyError, match="nonsense"):
+        _ = dataclasses.replace(Config(), signal_source="nonsense").config_hash
 
 
 def test_load_config_with_overrides(tmp_path):
