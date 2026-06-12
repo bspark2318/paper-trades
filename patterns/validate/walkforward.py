@@ -56,12 +56,17 @@ def _bars_left_in_session(bars: pd.DataFrame) -> np.ndarray:
     return (last_pos - np.arange(len(bars))).astype(np.int64)
 
 
-def run_walkforward(cfg: Config, bars: pd.DataFrame, cash: float = 100_000.0) -> WalkForwardResult:
+def run_walkforward(cfg: Config, bars: pd.DataFrame, cash: float = 100_000.0,
+                    min_query_idx: int | None = None) -> WalkForwardResult:
+    """min_query_idx restricts queries to bars at/after that index (still subject
+    to min_history_bars) — the evaluate gate uses it to trade the test period
+    only, while the matcher keeps the full prior history as evidence."""
     source = make_source(cfg)
     source.prepare(bars)
     bt = BacktestAdapter(bars, cash=cash, cost_bps=cfg.cost_bps)
     bars_left = _bars_left_in_session(bars)
     ts = bars["ts"].to_numpy()
+    first_query = max(cfg.min_history_bars, min_query_idx or 0)
 
     signals: list[Signal] = []
     trades: list[TradeRecord] = []
@@ -82,7 +87,7 @@ def run_walkforward(cfg: Config, bars: pd.DataFrame, cash: float = 100_000.0) ->
         elif (
             not holding
             and entry_order_id is None
-            and i >= cfg.min_history_bars
+            and i >= first_query
             and i % cfg.query_stride == 0
             and bars_left[i] >= cfg.horizon + 1     # entry at i+1, exit at i+1+H, same session
         ):

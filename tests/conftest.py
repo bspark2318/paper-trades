@@ -39,6 +39,18 @@ def make_multi_session_bars(dates: list[str], n_bars: int | dict = 390, start_pr
     return pd.concat(frames, ignore_index=True)
 
 
+def rebuild_ohlc_from_closes(bars: pd.DataFrame) -> pd.DataFrame:
+    """Re-derive open/high/low after a test has rewritten closes — fills happen
+    at opens, so planted patterns must be visible there too."""
+    out = bars.copy()
+    close = out["close"].to_numpy()
+    open_ = np.concatenate([[close[0]], close[:-1]])
+    out["open"] = open_
+    out["high"] = np.maximum(open_, close) * 1.0001
+    out["low"] = np.minimum(open_, close) * 0.9999
+    return out
+
+
 @pytest.fixture
 def conn(tmp_path):
     connection = dbm.connect(tmp_path / "test.db")

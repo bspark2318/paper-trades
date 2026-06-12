@@ -24,13 +24,15 @@ def wf_cfg(**over) -> Config:
 def bullish_bars(n_sessions: int = 6, n_bars: int = 40) -> pd.DataFrame:
     from tests.test_engine import plant_motif
 
+    from tests.conftest import rebuild_ohlc_from_closes
+
     dates = [f"2024-03-{d:02d}" for d in range(4, 4 + n_sessions)]
     bars = make_multi_session_bars(dates, n_bars=n_bars)
     for s in range(n_sessions):
         at = s * n_bars + 20
         bars = plant_motif(bars, at=at, motif=MOTIF)
         bars = force_rise(bars, after=at, horizon=H)
-    return bars
+    return rebuild_ohlc_from_closes(bars)
 
 
 # ---------- stats ----------

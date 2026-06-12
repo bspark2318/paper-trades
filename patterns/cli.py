@@ -176,6 +176,106 @@ def backtest(
 
 
 @app.command()
+def evaluate(
+    config_hash_arg: str = typer.Argument(..., metavar="CONFIG_HASH", help="Hash from `patterns ledger`"),
+    yes: bool = typer.Option(False, "--yes", help="Skip the retype confirmation"),
+    resamples: int = typer.Option(1000, "--resamples"),
+    config_path: str = typer.Option("config.yaml", "--config"),
+) -> None:
+    """Run THE one test-set evaluation for a config. Spends a permanent
+    evaluation counter row before computing — crashes count."""
+    import json
+
+    import pandas as pd
+
+    from patterns import db as dbm
+    from patterns.config import with_overrides
+    from patterns.data import store
+    from patterns.strategy.base import Direction
+    from patterns.validate import baselines, evaluate as ev, ledger as ledger_mod
+    from patterns.validate.walkforward import run_walkforward
+
+    base_cfg = load_config(config_path)
+    conn = dbm.connect(base_cfg.db_path)
+    typer.echo(dbm.report_banner(conn))
+
+    row = conn.execute(
+        "SELECT config_json FROM configs WHERE config_hash = ?", (config_hash_arg,)
+    ).fetchone()
+    if row is None:
+        typer.echo(f"unknown config hash {config_hash_arg!r} — backtest it first", err=True)
+        raise typer.Exit(1)
+    cfg = with_overrides(base_cfg, **json.loads(row["config_json"]))
+    if cfg.config_hash != config_hash_arg:
+        typer.echo("stored identity does not reproduce this hash — config drift?", err=True)
+        raise typer.Exit(1)
+
+    train_metrics = ev.latest_train_metrics(conn, cfg.config_hash)
+    if train_metrics is None:
+        typer.echo("no completed train backtest for this hash — run `patterns backtest` first", err=True)
+        raise typer.Exit(1)
+
+    sym = cfg.symbols[0]
+    bars = store.load_bars(conn, sym)
+    test_mask = bars["ts"] > pd.Timestamp(f"{cfg.split_date}T23:59:59Z")
+    if not test_mask.any():
+        typer.echo(f"no bars after split {cfg.split_date} — nothing to evaluate", err=True)
+        raise typer.Exit(1)
+    first_test_idx = int(test_mask.idxmax())
+
+    n_before = dbm.n_test_evaluations(conn)
+    typer.echo(f"\nThis permanently spends test evaluation #{n_before + 1} for {cfg.config_hash}.")
+    if not yes:
+        typed = typer.prompt("Retype the config hash to proceed")
+        if typed.strip() != cfg.config_hash:
+            typer.echo("hash mismatch — aborted, nothing spent")
+            raise typer.Exit(1)
+
+    # ---- the gate: spend first, compute second ----
+    run_id = dbm.start_run(conn, "evaluate", cfg.config_hash, seed=cfg.seed)
+    eval_id = ev.spend_evaluation(conn, cfg.config_hash, run_id)
+
+    try:
+        res = run_walkforward(cfg, bars, min_query_idx=first_test_idx)
+        m = dict(res.metrics)
+        decisions = [s.asof for s in res.signals if s.direction is Direction.LONG]
+        p_random = None
+        if decisions:
+            rb = baselines.random_baseline(
+                bars, decisions, m["mean_net_ret"], cfg.horizon, cfg.cost_bps,
+                first_test_idx, n_resamples=resamples, seed=cfg.seed,
+            )
+            p_random = rb.p_value
+            m["p_random"] = p_random
+    except BaseException:
+        dbm.finish_run(conn, run_id, status="crashed")
+        raise  # the spent CRASHED row stays
+
+    a = ledger_mod.alpha(dbm.n_configs_tried(conn))
+    verdict = ev.decide(train_metrics, m, p_random, a)
+    ev.record_verdict(conn, eval_id, verdict, m)
+    dbm.finish_run(conn, run_id, status="ok", metrics=m)
+
+    typer.echo(f"\n{'=' * 60}\n  VERDICT: {verdict.label}\n{'=' * 60}")
+    if verdict.reasons:
+        typer.echo("failed criteria:")
+        for r in verdict.reasons:
+            typer.echo(f"  - {r}")
+    typer.echo(f"\n{'':14}{'train':>12}{'test':>12}")
+    for key in ("n_trades", "mean_net_ret", "hit_rate", "sharpe"):
+        tr, te = train_metrics.get(key), m.get(key)
+        fmt = (lambda v: f"{v:+.4%}" if key == "mean_net_ret" else
+               f"{v:.2%}" if key == "hit_rate" else
+               f"{v:.2f}" if key == "sharpe" else str(v))
+        typer.echo(f"{key:14}{fmt(tr) if tr is not None else '—':>12}"
+                   f"{fmt(te) if te is not None else '—':>12}")
+    if p_random is not None:
+        typer.echo(f"\ntest p_random = {p_random:.4f} vs corrected alpha = {a:.2e}")
+    typer.echo("NOTE: paper fills are optimistic — read all numbers as upper bounds.")
+    typer.echo(dbm.report_banner(conn))
+
+
+@app.command()
 def ledger(
     config_path: str = typer.Option("config.yaml", "--config"),
 ) -> None:
