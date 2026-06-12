@@ -10,23 +10,39 @@ canonical table in patterns.config so the two cannot drift silently.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import ClassVar, Protocol, runtime_checkable
+from enum import StrEnum
+from typing import Callable, ClassVar, Protocol, TypedDict, runtime_checkable
 
 import pandas as pd
 
 from patterns.config import SOURCE_IDENTITY_FIELDS, Config
 
-LONG = "LONG"
-SHORT = "SHORT"
-NO_TRADE = "NO_TRADE"
+
+class Direction(StrEnum):
+    LONG = "LONG"
+    SHORT = "SHORT"
+    NO_TRADE = "NO_TRADE"
+
+
+# Aliases so call sites read `LONG`, not `Direction.LONG`.
+LONG = Direction.LONG
+SHORT = Direction.SHORT
+NO_TRADE = Direction.NO_TRADE
+
+
+class Diagnostics(TypedDict, total=False):
+    """Generic evidence behind a signal — only what every source can promise.
+    Each source extends this with its own typed fields (see KnnDiagnostics)."""
+
+    reason: str             # why this direction, e.g. "rule" | "too_few_matches"
 
 
 @dataclass(frozen=True)
 class Signal:
     asof: pd.Timestamp
     symbol: str
-    direction: str                      # LONG | SHORT | NO_TRADE
-    diagnostics: dict = field(default_factory=dict)
+    direction: Direction
+    diagnostics: Diagnostics = field(default_factory=lambda: Diagnostics())
 
 
 @runtime_checkable
@@ -43,19 +59,23 @@ class SignalSource(Protocol):
         ...
 
 
-SOURCES: dict[str, type] = {}
+# Values are constructors: Config -> SignalSource. (Plain `type` for the decorator
+# arg — Protocol classes can't be instantiated via type[Protocol] under mypy.)
+SOURCES: dict[str, Callable[[Config], SignalSource]] = {}
 
 
 def register_source(cls: type) -> type:
-    declared = SOURCE_IDENTITY_FIELDS.get(cls.name)
+    name: str = getattr(cls, "name")
+    identity_fields: tuple[str, ...] = tuple(getattr(cls, "identity_fields"))
+    declared = SOURCE_IDENTITY_FIELDS.get(name)
     if declared is None:
-        raise KeyError(f"Source {cls.name!r} missing from config.SOURCE_IDENTITY_FIELDS")
-    if tuple(cls.identity_fields) != declared:
+        raise KeyError(f"Source {name!r} missing from config.SOURCE_IDENTITY_FIELDS")
+    if identity_fields != declared:
         raise ValueError(
-            f"Source {cls.name!r} identity fields {cls.identity_fields} "
+            f"Source {name!r} identity fields {identity_fields} "
             f"!= config declaration {declared}"
         )
-    SOURCES[cls.name] = cls
+    SOURCES[name] = cls
     return cls
 
 

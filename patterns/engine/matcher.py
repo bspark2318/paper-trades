@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from jaxtyping import Bool, Float
 
 from patterns.engine.dedup import dedup_matches
 from patterns.engine.windows import WindowSet
@@ -24,23 +25,23 @@ from patterns.engine.windows import WindowSet
 CANDIDATE_BUFFER_FACTOR = 5  # take 5k nearest pre-dedup so dedup losses don't starve k
 
 
-def _utc(t) -> pd.Timestamp:
+def _utc(t: np.datetime64 | pd.Timestamp) -> pd.Timestamp:
     return pd.Timestamp(t, tz="UTC")
 
 
 @dataclass
 class MatchOutcome:
     query_ts: pd.Timestamp
-    match_ts: list          # kept matches, best first
-    distance: np.ndarray
-    fwd_ret: np.ndarray
-    n_candidates: int       # eligible windows before top-k/dedup
+    match_ts: list[pd.Timestamp]        # kept matches, best first
+    distance: Float[np.ndarray, " K"]
+    fwd_ret: Float[np.ndarray, " K"]
+    n_candidates: int                   # eligible windows before top-k/dedup
 
     @property
     def n(self) -> int:
         return len(self.match_ts)
 
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, float | int]:
         if self.n == 0:
             return {"n": 0, "mean": np.nan, "median": np.nan, "pct_positive": np.nan}
         return {
@@ -51,14 +52,15 @@ class MatchOutcome:
         }
 
 
-def eligible_mask(ws: WindowSet, q_row: int) -> np.ndarray:
+def eligible_mask(ws: WindowSet, q_row: int) -> Bool[np.ndarray, " M"]:
     """Candidates legal for a query at row q_row (no lookahead, usable fwd, normalizable)."""
     q_end = ws.end_idx[q_row]
-    return (
+    mask: np.ndarray = (
         ws.valid
         & ~np.isnan(ws.fwd_ret)
         & (ws.end_idx + ws.horizon <= q_end - ws.window)
     )
+    return mask
 
 
 def query(ws: WindowSet, asof: pd.Timestamp, k: int, dedup_gap: int) -> MatchOutcome:

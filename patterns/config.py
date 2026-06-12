@@ -12,6 +12,7 @@ import hashlib
 import json
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -101,7 +102,7 @@ class Config:
 _FIELD_TYPES = {f.name: f.type for f in fields(Config)}
 
 
-def _coerce(name: str, value):
+def _coerce(name: str, value: Any) -> Any:
     if name == "symbols":
         if isinstance(value, str):
             value = [value]
@@ -143,5 +144,5 @@ def parse_set_overrides(pairs: list[str]) -> dict:
     return out
 
 
-def with_overrides(cfg: Config, **kwargs) -> Config:
+def with_overrides(cfg: Config, **kwargs: Any) -> Config:
     return replace(cfg, **{k: _coerce(k, v) for k, v in kwargs.items()})

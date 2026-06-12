@@ -25,7 +25,8 @@ def filter_regular_hours(df: pd.DataFrame) -> pd.DataFrame:
         return df
     local = df["ts"].dt.tz_convert(NY)
     minutes = local.dt.hour * 60 + local.dt.minute
-    return df[(minutes >= 9 * 60 + 30) & (minutes < 16 * 60)].reset_index(drop=True)
+    rth: pd.DataFrame = df[(minutes >= 9 * 60 + 30) & (minutes < 16 * 60)]
+    return rth.reset_index(drop=True)
 
 
 def upsert_bars(conn: sqlite3.Connection, symbol: str, df: pd.DataFrame, source: str = "alpaca") -> int:

@@ -10,10 +10,12 @@ dependencies = [
     "pyyaml",
     "matplotlib",
     "alpaca-py",
+    "jaxtyping",
+    "beartype",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "mypy", "pandas-stubs", "types-PyYAML"]
 
 [project.scripts]
 patterns = "patterns.cli:app"
@@ -27,3 +29,16 @@ include = ["patterns*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+files = ["patterns"]
+python_version = "3.12"
+check_untyped_defs = true
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["alpaca.*", "jaxtyping", "matplotlib.*"]
+ignore_missing_imports = true

@@ -15,11 +15,17 @@ import pandas as pd
 EARLIEST = datetime(2016, 1, 1, tzinfo=timezone.utc)
 
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from alpaca.data.historical import StockHistoricalDataClient
+
+
 class MissingKeysError(RuntimeError):
     pass
 
 
-def _client():
+def _client() -> "StockHistoricalDataClient":
     key = os.environ.get("ALPACA_API_KEY")
     secret = os.environ.get("ALPACA_SECRET_KEY")
     if not key or not secret:
@@ -37,15 +43,18 @@ def fetch_minute_bars(symbol: str, start: datetime | None, end: datetime | None 
     from alpaca.data.requests import StockBarsRequest
     from alpaca.data.timeframe import TimeFrame
 
+    from alpaca.data.enums import Adjustment
+
     request = StockBarsRequest(
         symbol_or_symbols=symbol,
         timeframe=TimeFrame.Minute,
         start=start or EARLIEST,
         end=end,
-        adjustment="all",
+        adjustment=Adjustment.ALL,
     )
     bars = _client().get_stock_bars(request)
-    df = bars.df
+    assert not isinstance(bars, dict)  # raw-data mode is never requested
+    df: pd.DataFrame = bars.df
     if df.empty:
         return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "volume"])
     df = df.reset_index()

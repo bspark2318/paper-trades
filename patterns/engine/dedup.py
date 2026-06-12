@@ -5,9 +5,12 @@ matches, exactly the closest survives."""
 from __future__ import annotations
 
 import numpy as np
+from beartype import beartype
+from jaxtyping import Int, jaxtyped
 
 
-def dedup_matches(end_indices: np.ndarray, gap: int, limit: int | None = None) -> list[int]:
+@jaxtyped(typechecker=beartype)
+def dedup_matches(end_indices: Int[np.ndarray, " C"], gap: int, limit: int | None = None) -> list[int]:
     """end_indices: candidate global end-indices, already sorted best-first.
     Returns positions (into the input) of kept candidates; a candidate is
     rejected if within `gap` bars of any already-kept one."""

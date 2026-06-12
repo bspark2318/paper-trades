@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from jaxtyping import Bool, Float, Int, Shaped
 
 from patterns.engine.normalize import normalize
 
@@ -23,15 +24,17 @@ NY = "America/New_York"
 
 @dataclass
 class WindowSet:
-    Z: np.ndarray            # (M, W) normalized float32
-    end_idx: np.ndarray      # (M,) global bar index of each window's last bar
-    end_ts: np.ndarray       # (M,) UTC timestamps of each window's last bar
-    fwd_ret: np.ndarray      # (M,) H-bar forward return from window end; NaN if it leaves the session
-    valid: np.ndarray        # (M,) row is normalizable
+    """M windows over N bars; D = window * features-per-bar values per shape."""
+
+    Z: Float[np.ndarray, "M D"]        # normalized float32 shape matrix
+    end_idx: Int[np.ndarray, " M"]     # global bar index of each window's last bar
+    end_ts: Shaped[np.ndarray, " M"]   # UTC-naive datetime64 of each window's last bar
+    fwd_ret: Float[np.ndarray, " M"]   # H-bar forward return; NaN if it leaves the session
+    valid: Bool[np.ndarray, " M"]      # row is normalizable
     window: int
     horizon: int
-    bar_ts: np.ndarray       # (N,) all bar timestamps (global index → ts)
-    closes: np.ndarray       # (N,) all closes
+    bar_ts: Shaped[np.ndarray, " N"]   # all bar timestamps (global index → ts)
+    closes: Float[np.ndarray, " N"]    # all closes
 
     @property
     def n_windows(self) -> int:
@@ -68,7 +71,9 @@ def build_windows(bars: pd.DataFrame, window: int, horizon: int,
     closes = ohlc["close"]
     session_label = bars["ts"].dt.tz_convert(NY).dt.date.to_numpy()
 
-    rows, end_idx, fwd = [], [], []
+    rows: list[np.ndarray] = []
+    end_idx: list[int] = []
+    fwd: list[float] = []
     start = 0
     n = len(bars)
     for i in range(1, n + 1):
@@ -99,7 +104,17 @@ def build_windows(bars: pd.DataFrame, window: int, horizon: int,
     )
 
 
-def _collect_session(ohlc, lo, hi, window, horizon, features, rows, end_idx, fwd):
+def _collect_session(
+    ohlc: dict[str, np.ndarray],
+    lo: int,
+    hi: int,
+    window: int,
+    horizon: int,
+    features: str,
+    rows: list[np.ndarray],
+    end_idx: list[int],
+    fwd: list[float],
+) -> None:
     """Append all windows of one session [lo, hi) to the accumulators."""
     closes = ohlc["close"]
     n = hi - lo

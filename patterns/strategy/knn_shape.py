@@ -15,8 +15,20 @@ import pandas as pd
 
 from patterns.config import Config
 from patterns.engine import matcher
-from patterns.engine.windows import build_windows
-from patterns.strategy.base import LONG, NO_TRADE, SHORT, Signal, register_source
+from patterns.engine.windows import WindowSet, build_windows
+from patterns.strategy.base import LONG, NO_TRADE, SHORT, Diagnostics, Direction, Signal, register_source
+
+
+class KnnDiagnostics(Diagnostics, total=False):
+    """k-NN-specific evidence: the match sample and the rule's inputs."""
+
+    n: int                  # deduped matches used
+    mean: float             # mean forward return of matches
+    median: float
+    pct_positive: float
+    n_candidates: int       # eligible windows before top-k/dedup
+    uncond_mean: float      # point-in-time unconditional H-bar mean
+    threshold: float        # bar the mean had to clear
 
 
 @register_source
@@ -36,7 +48,7 @@ class KnnShape:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.symbol = cfg.symbols[0]
-        self.ws = None
+        self.ws: WindowSet | None = None
 
     def prepare(self, bars: pd.DataFrame) -> None:
         self.ws = build_windows(
@@ -49,15 +61,18 @@ class KnnShape:
 
     def signal_at(self, asof: pd.Timestamp) -> Signal:
         cfg = self.cfg
-        out = matcher.query(self.ws, asof, k=cfg.k, dedup_gap=cfg.dedup_gap)
+        ws = self.ws
+        if ws is None:
+            raise RuntimeError("signal_at() before prepare()")
+        out = matcher.query(ws, asof, k=cfg.k, dedup_gap=cfg.dedup_gap)
         stats = out.stats()
 
         if out.n < cfg.min_matches:
             return self._signal(asof, NO_TRADE, stats, reason="too_few_matches")
 
-        q_row = self.ws.row_for_ts(asof)
-        eligible = matcher.eligible_mask(self.ws, q_row)
-        uncond = float(np.mean(self.ws.fwd_ret[eligible]))
+        q_row = ws.row_for_ts(asof)
+        eligible = matcher.eligible_mask(ws, q_row)
+        uncond = float(np.mean(ws.fwd_ret[eligible]))
         threshold = cfg.t_multiplier * uncond
 
         if stats["pct_positive"] >= cfg.p_threshold and stats["mean"] >= threshold:
@@ -69,7 +84,7 @@ class KnnShape:
         ):
             direction = SHORT
         else:
-            direction = NO_TRADE
+            direction = Direction.NO_TRADE
 
         return self._signal(
             asof, direction, stats,
@@ -77,10 +92,11 @@ class KnnShape:
             n_candidates=out.n_candidates,
         )
 
-    def _signal(self, asof, direction, stats, **extra) -> Signal:
+    def _signal(self, asof: pd.Timestamp, direction: Direction, stats: dict, **extra: object) -> Signal:
+        diagnostics: KnnDiagnostics = {**stats, **extra}  # type: ignore[typeddict-item]
         return Signal(
             asof=pd.Timestamp(asof),
             symbol=self.symbol,
             direction=direction,
-            diagnostics={**stats, **extra},
+            diagnostics=diagnostics,
         )

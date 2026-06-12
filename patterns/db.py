@@ -180,7 +180,9 @@ def start_run(
         (run_type, config_hash, seed, asof, utcnow()),
     )
     conn.commit()
-    return cur.lastrowid
+    rowid = cur.lastrowid
+    assert rowid is not None
+    return rowid
 
 
 def finish_run(conn: sqlite3.Connection, run_id: int, status: str = "ok", metrics: dict | None = None) -> None:
@@ -196,11 +198,11 @@ def n_configs_tried(conn: sqlite3.Connection) -> int:
     row = conn.execute(
         "SELECT COUNT(DISTINCT config_hash) FROM runs WHERE run_type = 'backtest' AND status = 'ok'"
     ).fetchone()
-    return row[0]
+    return int(row[0])
 
 
 def n_test_evaluations(conn: sqlite3.Connection) -> int:
-    return conn.execute("SELECT COUNT(*) FROM test_evaluations").fetchone()[0]
+    return int(conn.execute("SELECT COUNT(*) FROM test_evaluations").fetchone()[0])
 
 
 def report_banner(conn: sqlite3.Connection) -> str:
