@@ -49,6 +49,21 @@ def plot_match_overlay(ws: WindowSet, outcome: MatchOutcome, path: str | Path, t
     return out
 
 
+def plot_equity(equity_ts: np.ndarray, equity: np.ndarray, path: str | Path,
+                title: str = "walk-forward equity") -> Path:
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(equity_ts, equity, lw=1.2, color="steelblue")
+    ax.set_ylabel("equity ($)")
+    ax.set_title(title)
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=120)
+    plt.close(fig)
+    return out
+
+
 def plot_fwd_histogram(outcome: MatchOutcome, path: str | Path) -> Path:
     """Distribution of what happened next, across all kept matches."""
     fwd_pct = outcome.fwd_ret * 100

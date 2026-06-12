@@ -42,6 +42,15 @@ class BacktestAdapter:
 
     # ---- clock ----
 
+    @property
+    def index(self) -> int:
+        """Current bar index — the walk-forward aligns its bookkeeping to this."""
+        return self._i
+
+    @property
+    def n_bars(self) -> int:
+        return len(self._ts)
+
     def now(self) -> pd.Timestamp:
         return pd.Timestamp(self._ts[self._i])
 
