@@ -51,6 +51,10 @@ SOURCE_IDENTITY_FIELDS: dict[str, tuple[str, ...]] = {
         "template_patterns",
         "template_threshold",
     ),
+    "candles": (
+        "candle_patterns",
+        "candle_trend_lookback",
+    ),
 }
 
 
@@ -83,6 +87,13 @@ class Config:
         "ascending", "bear_flag", "descending_triangle", "rising_wedge",
     )
     template_threshold: float = 3.5
+    # candles source knobs (ignored by other sources; see SOURCE_IDENTITY_FIELDS)
+    candle_patterns: tuple[str, ...] = (
+        "hammer", "shooting_star", "bullish_engulfing", "bearish_engulfing",
+        "piercing_line", "dark_cloud_cover", "morning_star", "evening_star",
+        "three_white_soldiers", "three_black_crows",
+    )
+    candle_trend_lookback: int = 10     # bars of preceding trend a reversal needs; 0 = pure anatomy
     enable_shorts: bool = False
     cost_bps: float = 5.0
     split_date: str = "2022-12-31"
@@ -121,7 +132,7 @@ def _coerce(name: str, value: Any) -> Any:
         if isinstance(value, str):
             value = [value]
         return tuple(str(s).upper() for s in value)
-    if name == "template_patterns":
+    if name in ("template_patterns", "candle_patterns"):
         if isinstance(value, str):
             value = [value]
         return tuple(str(s) for s in value)
