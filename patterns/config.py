@@ -79,8 +79,8 @@ class Config:
     template_patterns: tuple[str, ...] = (
         "double_bottom", "triple_bottom", "inverse_head_shoulders", "rounding_bottom",
         "cup_with_handle", "v_reversal", "double_top", "triple_top", "head_shoulders",
-        "spike_top", "bull_flag", "high_tight_flag", "ascending_triangle",
-        "ascending", "descending_triangle",
+        "spike_top", "bull_flag", "high_tight_flag", "ascending_triangle", "falling_wedge",
+        "ascending", "bear_flag", "descending_triangle", "rising_wedge",
     )
     template_threshold: float = 3.5
     enable_shorts: bool = False

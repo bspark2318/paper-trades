@@ -38,19 +38,17 @@ class Template:
 # the validation layer decides whether they pay, and rejection is the expected result.
 #
 # Shape selection guided by Bulkowski's measured failure-rank ordering (thepatternsite.com):
-# the classics traders treat as highest-signal that also render cleanly as a CLOSE path.
+# the classics traders treat as highest-signal that also render as a CLOSE path.
 # Bulkowski's rates are daily-bar / 5%-breakout over months and do NOT transfer to
 # 1-min/time-stop — they pick the shapes; our referee re-measures from scratch.
 #
-# Deliberately omitted, because a single close path cannot carry what defines them:
-#  - symmetric triangle: breaks either way, so it has no single direction to emit;
-#  - rectangles: a flat consolidation window is near-zero-variance, so z-scoring amplifies
-#    noise and the shape matches everything;
-#  - wedges (rising/falling) and bear flag: their bull/bear direction lives in the high/low
-#    ENVELOPE (sloping boundary lines), not the close line — as close paths a falling wedge
-#    is indistinguishable from a descending triangle, and a bear flag from a bottom's recovery,
-#    so they collide with OPPOSITE-direction patterns (<1.5 apart) and the trade direction
-#    becomes a coin flip. Same reason wicks need OHLC; these belong to k-NN(ohlc), not here.
+# Some shapes (wedges, bear flag) trace nearly the same close path as an OPPOSITE-direction
+# pattern, because their bull/bear call lives in the high/low ENVELOPE, not the close line —
+# a falling wedge ~ a descending triangle (0.80 apart), a bear flag ~ a bottom's recovery.
+# The signal layer handles that without dropping them: it abstains whenever the templates
+# within threshold disagree on direction, so a collision zone yields NO_TRADE instead of a
+# coin-flip. Still omitted: symmetric triangle (no single direction) and rectangles (a flat
+# window is near-zero-variance, so z-scoring amplifies noise and it matches everything).
 _TEMPLATES: tuple[Template, ...] = (
     # --- reversals: bottoms (bullish) ---
     Template("double_bottom",          (1.00, 0.62, 0.80, 0.60, 1.00), Direction.LONG),
@@ -68,9 +66,12 @@ _TEMPLATES: tuple[Template, ...] = (
     Template("bull_flag",              (0.55, 0.85, 1.05, 1.00, 0.97), Direction.LONG),
     Template("high_tight_flag",        (0.30, 0.68, 1.00, 1.05, 1.02, 1.05), Direction.LONG),
     Template("ascending_triangle",     (0.50, 1.00, 0.72, 1.00, 0.86, 1.00, 0.95), Direction.LONG),
+    Template("falling_wedge",          (1.00, 0.62, 0.84, 0.56, 0.76, 0.62, 0.72), Direction.LONG),
     Template("ascending",             (0.80, 0.86, 0.92, 0.97, 1.03), Direction.LONG),
     # --- continuations (bearish) ---
+    Template("bear_flag",              (1.45, 1.15, 0.95, 1.00, 1.03), Direction.SHORT),
     Template("descending_triangle",    (1.00, 0.50, 0.84, 0.50, 0.70, 0.50, 0.60), Direction.SHORT),
+    Template("rising_wedge",           (1.00, 1.38, 1.16, 1.44, 1.24, 1.38, 1.28), Direction.SHORT),
 )
 
 TEMPLATES: dict[str, Template] = {t.name: t for t in _TEMPLATES}
