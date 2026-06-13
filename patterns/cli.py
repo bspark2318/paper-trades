@@ -9,6 +9,8 @@ from patterns.config import load_config, parse_set_overrides
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 data_app = typer.Typer(no_args_is_help=True)
 app.add_typer(data_app, name="data", help="Bar acquisition and storage")
+report_app = typer.Typer(no_args_is_help=True)
+app.add_typer(report_app, name="report", help="Live paper-account reports")
 
 
 @data_app.command("refresh")
@@ -363,6 +365,37 @@ def status(
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
     typer.echo(render_status(conn, broker, cfg))
+
+
+@report_app.command("weekly")
+def report_weekly(
+    days: int = typer.Option(7, "--days", help="Rolling window length"),
+    set_: list[str] = typer.Option([], "--set", help="Override key=value"),
+    config_path: str = typer.Option("config.yaml", "--config"),
+) -> None:
+    """Markdown + PNG digest of the paper account: live trades, equity vs
+    buy-and-hold, and live-vs-backtest divergence."""
+    import pandas as pd
+
+    from patterns import db as dbm
+    from patterns.live.weekly_report import write_report
+
+    cfg = load_config(config_path, parse_set_overrides(set_))
+    conn = dbm.connect(cfg.db_path)
+    now = pd.Timestamp.now("UTC")
+    rep = write_report(conn, cfg, now, window_days=days)
+
+    typer.echo(dbm.report_banner(conn))
+    typer.echo(f"\nweek to {rep.end:%Y-%m-%d} UTC | {rep.n_trades} closed trades")
+    if rep.n_trades:
+        typer.echo(f"live mean net/trade {rep.mean_net_ret:+.4%} | realized P&L ${rep.total_pnl:+,.2f}")
+        if rep.backtest_mean is not None:
+            typer.echo(f"vs backtest {rep.backtest_mean:+.4%} "
+                       f"(divergence {rep.mean_net_ret - rep.backtest_mean:+.4%})")
+    typer.echo("NOTE: paper fills are optimistic — read all numbers as upper bounds.")
+    if rep.png_path:
+        typer.echo(f"saved: {rep.png_path}")
+    typer.echo(f"saved: {rep.md_path}")
 
 
 @app.command()

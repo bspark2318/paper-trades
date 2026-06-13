@@ -64,6 +64,27 @@ def plot_equity(equity_ts: np.ndarray, equity: np.ndarray, path: str | Path,
     return out
 
 
+def plot_weekly_equity(eq_ts: np.ndarray, eq: np.ndarray,
+                       bench: tuple[np.ndarray, np.ndarray] | None,
+                       path: str | Path, title: str = "paper equity") -> Path:
+    """Live paper equity over the week, with QQQ buy-and-hold (rebased to the same
+    starting equity) for reference."""
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(eq_ts, eq, lw=1.6, color="steelblue", label="paper equity")
+    if bench is not None:
+        ax.plot(bench[0], bench[1], lw=1.2, color="gray", ls="--", label="buy-and-hold")
+    ax.set_ylabel("equity ($)")
+    ax.set_title(title)
+    ax.legend(loc="best")
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=120)
+    plt.close(fig)
+    return out
+
+
 def plot_fwd_histogram(outcome: MatchOutcome, path: str | Path) -> Path:
     """Distribution of what happened next, across all kept matches."""
     fwd_pct = outcome.fwd_ret * 100
