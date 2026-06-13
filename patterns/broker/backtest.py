@@ -85,6 +85,10 @@ class BacktestAdapter:
             return []
         return [Position(symbol=self.symbol, qty=self._qty, avg_entry_price=self._avg_entry)]
 
+    def get_open_orders(self) -> list[Order]:
+        """Orders submitted but not yet filled — the pending fills awaiting the next bar."""
+        return [self._orders[oid] for oid in self._pending]
+
     def submit_order(self, symbol: str, qty: float, side: OrderSide) -> str:
         order_id = f"bt-{self._n}"
         self._n += 1

@@ -301,6 +301,71 @@ def ledger(
 
 
 @app.command()
+def trade(
+    iterations: int = typer.Option(0, "--iterations", help="Stop after N poll cycles (0 = run forever)"),
+    poll: float = typer.Option(60.0, "--poll", help="Seconds between polls during RTH"),
+    set_: list[str] = typer.Option([], "--set", help="Override key=value"),
+    config_path: str = typer.Option("config.yaml", "--config"),
+) -> None:
+    """Intraday paper-trading loop for a SURVIVOR config: poll closed bars → signal
+    → order, with time-stop + force-flat exits. Live broker state is the source of
+    truth, so killing and restarting mid-session is safe."""
+    from patterns import db as dbm
+    from patterns.broker.alpaca import AlpacaAdapter, MissingKeysError
+    from patterns.live.feed import DbBarFeed
+    from patterns.live.trade_loop import NotASurvivorError, TradeLoop
+
+    cfg = load_config(config_path, parse_set_overrides(set_))
+    conn = dbm.connect(cfg.db_path)
+    typer.echo(dbm.report_banner(conn))
+
+    try:
+        broker = AlpacaAdapter(paper=True)
+    except MissingKeysError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+
+    feed = DbBarFeed(conn, cfg.symbols[0])
+    run_id = dbm.start_run(conn, "trade", cfg.config_hash, seed=cfg.seed)
+    try:
+        loop = TradeLoop(cfg, broker, feed, conn, run_id=run_id)
+    except NotASurvivorError as e:
+        dbm.finish_run(conn, run_id, status="refused")
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"armed: {cfg.config_hash} ({cfg.signal_source}) | "
+               f"sizing {cfg.position_size:.0%} equity | horizon {cfg.horizon} bars | "
+               f"force-flat {cfg.force_flat_minutes_before_close}m before close")
+    try:
+        loop.run(max_iterations=iterations or None, poll_seconds=poll)
+    except KeyboardInterrupt:
+        typer.echo("\nstopped (positions, if any, remain under broker management)")
+    finally:
+        dbm.finish_run(conn, run_id, status="ok")
+
+
+@app.command()
+def status(
+    set_: list[str] = typer.Option([], "--set", help="Override key=value"),
+    config_path: str = typer.Option("config.yaml", "--config"),
+) -> None:
+    """Show the paper account: holdings, open orders, and P&L journal."""
+    from patterns import db as dbm
+    from patterns.broker.alpaca import AlpacaAdapter, MissingKeysError
+    from patterns.live.status import render_status
+
+    cfg = load_config(config_path, parse_set_overrides(set_))
+    conn = dbm.connect(cfg.db_path)
+    try:
+        broker = AlpacaAdapter(paper=True)
+    except MissingKeysError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+    typer.echo(render_status(conn, broker, cfg))
+
+
+@app.command()
 def config(
     set_: list[str] = typer.Option([], "--set", help="Override key=value"),
     config_path: str = typer.Option("config.yaml", "--config"),

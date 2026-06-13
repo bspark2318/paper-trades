@@ -206,6 +206,17 @@ def n_test_evaluations(conn: sqlite3.Connection) -> int:
     return int(conn.execute("SELECT COUNT(*) FROM test_evaluations").fetchone()[0])
 
 
+def is_survivor(conn: sqlite3.Connection, config_hash: str) -> bool:
+    """True iff this config has at least one completed test evaluation that SURVIVED.
+    The live loop arms only for survivors — the gate that guards the test set also
+    guards the trigger finger."""
+    row = conn.execute(
+        "SELECT 1 FROM test_evaluations WHERE config_hash = ? AND verdict = 'SURVIVED' LIMIT 1",
+        (config_hash,),
+    ).fetchone()
+    return row is not None
+
+
 def report_banner(conn: sqlite3.Connection) -> str:
     """Mandatory header for every report: how often the test set has been touched."""
     n_evals = n_test_evaluations(conn)

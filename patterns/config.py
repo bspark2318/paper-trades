@@ -100,7 +100,7 @@ class Config:
     query_stride: int = 1
 
     # Plumbing — excluded from identity.
-    position_size: float = 0.10
+    position_size: float = 0.05
     force_flat_minutes_before_close: int = 5
     seed: int = 42
     db_path: str = "db/patterns.db"

@@ -43,7 +43,7 @@ split_date: "2022-12-31"  # [identity] train <= this date < test
 query_stride: 1           # [identity] walk-forward queries every Nth bar
 
 # Execution plumbing — NOT part of the hypothesis, excluded from the config hash.
-position_size: 0.10       # fraction of paper equity per trade (one position at a time)
+position_size: 0.05       # fraction of paper equity per trade (one position at a time)
 force_flat_minutes_before_close: 5
 seed: 42                  # baselines randomness only; strategy itself is deterministic
 db_path: db/patterns.db

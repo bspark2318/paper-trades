@@ -98,6 +98,15 @@ class AlpacaAdapter:
                                 avg_entry_price=float(p.avg_entry_price)))
         return out
 
+    def get_open_orders(self) -> list[Order]:
+        """Live open (unfilled) orders — the restart reconcile reads these so a
+        process that died between submit and fill never double-submits."""
+        from alpaca.trading.enums import QueryOrderStatus
+        from alpaca.trading.requests import GetOrdersRequest
+
+        req = GetOrdersRequest(status=QueryOrderStatus.OPEN)
+        return [_to_order(o) for o in self._client.get_orders(req)]
+
     def submit_order(self, symbol: str, qty: float, side: OrderSide) -> str:
         if qty <= 0:
             return self._reject(symbol, qty, side, "qty<=0")
