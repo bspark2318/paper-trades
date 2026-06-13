@@ -45,6 +45,12 @@ SOURCE_IDENTITY_FIELDS: dict[str, tuple[str, ...]] = {
         "features",
         "normalization",
     ),
+    "template": (
+        "window",
+        "normalization",
+        "template_patterns",
+        "template_threshold",
+    ),
 }
 
 
@@ -69,6 +75,12 @@ class Config:
     min_history_bars: int = 35000
     features: str = "close"
     normalization: str = "logret_zscore"
+    # template source knobs (ignored by knn_shape; see SOURCE_IDENTITY_FIELDS)
+    template_patterns: tuple[str, ...] = (
+        "double_bottom", "double_top", "v_reversal",
+        "spike_top", "bull_flag", "head_shoulders", "ascending",
+    )
+    template_threshold: float = 3.5
     enable_shorts: bool = False
     cost_bps: float = 5.0
     split_date: str = "2022-12-31"
@@ -107,6 +119,10 @@ def _coerce(name: str, value: Any) -> Any:
         if isinstance(value, str):
             value = [value]
         return tuple(str(s).upper() for s in value)
+    if name == "template_patterns":
+        if isinstance(value, str):
+            value = [value]
+        return tuple(str(s) for s in value)
     default = getattr(Config, name)
     if isinstance(default, bool):
         if isinstance(value, str):
