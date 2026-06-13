@@ -163,6 +163,8 @@ def _to_side(raw: Any) -> OrderSide:
 def _to_order(o: Any) -> Order:
     fill_price = float(o.filled_avg_price) if getattr(o, "filled_avg_price", None) else None
     filled_at = pd.Timestamp(o.filled_at) if getattr(o, "filled_at", None) else None
+    raw_filled_qty = getattr(o, "filled_qty", None)
+    filled_qty = float(raw_filled_qty) if raw_filled_qty is not None else None
     return Order(
         id=str(o.id),
         symbol=str(o.symbol),
@@ -172,4 +174,5 @@ def _to_order(o: Any) -> Order:
         submitted_at=pd.Timestamp(o.submitted_at),
         filled_at=filled_at,
         fill_price=fill_price,
+        filled_qty=filled_qty,
     )

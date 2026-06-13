@@ -245,6 +245,74 @@ def test_no_exit_before_horizon():
     assert len(broker.get_positions()) == 1
 
 
+def test_exit_pending_blocks_resubmit():
+    conn = memconn()
+    c = cfg(horizon=3)
+    bars = session_bars(20)
+    now = pd.Timestamp(bars["ts"].iloc[-1]) + pd.Timedelta(minutes=1)
+    broker = FakeBroker(clock(now, 120), price=100.0)
+    broker.plant_position("QQQ", 50, 100.0)
+    broker.fill = False
+    broker.submit_order("QQQ", 50, OrderSide.SELL)     # an exit already in flight
+    loop = build_loop(c, broker, bars, conn, Direction.LONG)
+    res = loop.step()
+    assert res.action == "exit_pending"
+    # no second sell submitted (still exactly one open order)
+    assert len(broker.get_open_orders()) == 1
+
+
+def test_journal_sync_marks_order_and_signal_executed():
+    conn = memconn()
+    c = cfg()
+    ts = pd.Timestamp("2024-03-04 15:00", tz="UTC")
+    sig = Signal(asof=ts, symbol="QQQ", direction=Direction.LONG, diagnostics={"reason": "rule"})
+    sid = journal.record_signal(conn, None, c.config_hash, sig)
+    journal.record_order(conn, None, sid, "QQQ", 50, OrderSide.BUY, "entry", "b1", ts)
+
+    filled = Order("b1", "QQQ", 50, OrderSide.BUY, OrderStatus.FILLED, submitted_at=ts,
+                   filled_at=ts, fill_price=100.0, filled_qty=48)   # partial fill
+    journal.sync_order(conn, filled)
+
+    o = conn.execute("SELECT status, filled_qty FROM orders WHERE broker_order_id='b1'").fetchone()
+    assert o["status"] == "filled" and o["filled_qty"] == 48        # real fill qty, not ordered 50
+    s = conn.execute("SELECT status FROM signals WHERE id = ?", (sid,)).fetchone()
+    assert s["status"] == "executed"
+
+
+def test_size_zero_when_equity_too_small():
+    conn = memconn()
+    c = cfg()
+    bars = session_bars(20, price=100.0)
+    now = pd.Timestamp(bars["ts"].iloc[-1]) + pd.Timedelta(minutes=1)
+    broker = FakeBroker(clock(now, 120), equity=10.0, price=100.0)   # 10*0.05/100 < 1 share
+    loop = build_loop(c, broker, bars, conn, Direction.LONG)
+    res = loop.step()
+    assert res.action == "size_zero"
+    assert broker.get_positions() == []
+
+
+def test_no_price_when_close_nonpositive():
+    conn = memconn()
+    c = cfg()
+    bars = session_bars(20, price=0.0)                 # close == 0
+    now = pd.Timestamp(bars["ts"].iloc[-1]) + pd.Timedelta(minutes=1)
+    broker = FakeBroker(clock(now, 120), price=100.0)
+    loop = build_loop(c, broker, bars, conn, Direction.LONG)
+    assert loop.step().action == "no_price"
+    assert broker.get_positions() == []
+
+
+def test_no_bars_while_open_is_noop():
+    conn = memconn()
+    c = cfg()
+    empty = session_bars(0)
+    now = pd.Timestamp("2024-03-04 15:00", tz=NY)
+    broker = FakeBroker(clock(now, 120))
+    loop = build_loop(c, broker, empty, conn, Direction.LONG)
+    assert loop.step().action == "no_bars"
+    assert broker.get_positions() == []
+
+
 def test_force_flat_overrides_and_sells():
     conn = memconn()
     c = cfg(horizon=3, force_flat_minutes_before_close=5)

@@ -60,12 +60,15 @@ def record_order(conn: sqlite3.Connection, run_id: int | None, signal_id: int | 
 
 def sync_order(conn: sqlite3.Connection, o: Order) -> None:
     """Reflect a broker order's current status into the journal."""
+    # Record the actual filled quantity (may be < ordered qty on a partial fill),
+    # falling back to the order qty only if the broker didn't report a fill qty.
+    filled_qty = None
+    if o.status is OrderStatus.FILLED:
+        filled_qty = o.filled_qty if o.filled_qty is not None else o.qty
     conn.execute(
         """UPDATE orders SET status = ?, filled_qty = ?, filled_avg_price = ?, filled_at = ?
            WHERE broker_order_id = ?""",
-        (str(o.status),
-         o.qty if o.status is OrderStatus.FILLED else None,
-         o.fill_price,
+        (str(o.status), filled_qty, o.fill_price,
          o.filled_at.isoformat() if o.filled_at is not None else None,
          o.id),
     )

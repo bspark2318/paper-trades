@@ -18,12 +18,14 @@ class FakeTradingClient:
     """Implements only the methods AlpacaAdapter calls. Records submissions so a
     test can assert that locally-rejected orders never reach the wire."""
 
-    def __init__(self, account=None, positions=None, clock=None, orders=None):
+    def __init__(self, account=None, positions=None, clock=None, orders=None, open_orders=None):
         self._account = account
         self._positions = positions or []
         self._clock = clock
         self._orders = orders or {}
+        self._open_orders = open_orders or []
         self.submitted: list = []
+        self.order_queries: list = []
         self._next_id = 100
 
     def get_account(self):
@@ -49,6 +51,10 @@ class FakeTradingClient:
 
     def get_order_by_id(self, oid):
         return self._orders[oid]
+
+    def get_orders(self, req):
+        self.order_queries.append(req)
+        return self._open_orders
 
 
 def _account(equity="100000", cash="50000"):
@@ -147,6 +153,38 @@ def test_nonpositive_qty_rejected_without_network():
     oid = a.submit_order("QQQ", 0, OrderSide.BUY)
     assert fake.submitted == []
     assert a.get_order(oid).reason == "qty<=0"
+
+
+def test_get_open_orders_maps_and_queries_open_only():
+    o1 = SimpleNamespace(
+        id="200", symbol="QQQ", qty="5", side="buy", status="new",
+        filled_avg_price=None, filled_at=None, filled_qty="0",
+        submitted_at=pd.Timestamp("2026-06-12 14:30", tz="UTC"),
+    )
+    fake = FakeTradingClient(open_orders=[o1])
+    a = AlpacaAdapter(client=fake)
+    out = a.get_open_orders()
+    assert len(fake.order_queries) == 1                          # asked the broker
+    assert str(fake.order_queries[0].status).lower().endswith("open")
+    assert len(out) == 1
+    assert out[0].symbol == "QQQ" and out[0].side is OrderSide.BUY
+    assert out[0].status is OrderStatus.SUBMITTED               # "new" → in-flight
+
+
+def test_get_open_orders_empty():
+    a = AlpacaAdapter(client=FakeTradingClient(open_orders=[]))
+    assert a.get_open_orders() == []
+
+
+def test_filled_qty_is_mapped():
+    o = SimpleNamespace(
+        id="x", symbol="QQQ", qty="10", side="buy", status="filled",
+        filled_avg_price="100.0", filled_qty="7",                # partial fill
+        filled_at=pd.Timestamp("2026-06-12 14:31", tz="UTC"),
+        submitted_at=pd.Timestamp("2026-06-12 14:30", tz="UTC"),
+    )
+    a = AlpacaAdapter(client=FakeTradingClient(orders={"x": o}))
+    assert a.get_order("x").filled_qty == pytest.approx(7.0)
 
 
 @pytest.mark.parametrize("raw,expected", [

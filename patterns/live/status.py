@@ -43,7 +43,7 @@ def render_status(conn: sqlite3.Connection, broker: LiveBroker, cfg: Config) -> 
     # realized P&L from filled exit orders recorded in the journal
     row = conn.execute(
         """SELECT COUNT(*) AS n,
-                  SUM(CASE WHEN intent IN ('time_stop','time_stop_exit','force_flat')
+                  SUM(CASE WHEN intent IN ('time_stop','force_flat')
                            THEN 1 ELSE 0 END) AS exits
            FROM orders WHERE symbol = ? AND status = 'filled'""",
         (sym,),

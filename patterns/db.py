@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS orders (
     side             TEXT NOT NULL,
     qty              REAL NOT NULL,
     order_type       TEXT NOT NULL DEFAULT 'market',
-    intent           TEXT NOT NULL,     -- entry|time_stop_exit|force_flat
+    intent           TEXT NOT NULL,     -- entry|time_stop|force_flat
     broker_order_id  TEXT UNIQUE,
     status           TEXT NOT NULL DEFAULT 'submitted',
     filled_qty       REAL,

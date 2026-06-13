@@ -47,6 +47,7 @@ class Order:
     submitted_at: pd.Timestamp
     filled_at: pd.Timestamp | None = None
     fill_price: float | None = None
+    filled_qty: float | None = None     # actual quantity filled (may be < qty on partials)
     reason: str = ""        # set when REJECTED, or "force_flat" on safety-net exits
 
 

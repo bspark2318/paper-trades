@@ -133,7 +133,7 @@ class BacktestAdapter:
         self._orders[order_id] = Order(
             id=o.id, symbol=o.symbol, qty=o.qty, side=o.side, status=OrderStatus.FILLED,
             submitted_at=o.submitted_at, filled_at=self.now(), fill_price=fill_price,
-            reason=o.reason,
+            filled_qty=o.qty, reason=o.reason,
         )
 
     def _liquidate(self, price: float, reason: str) -> None:
