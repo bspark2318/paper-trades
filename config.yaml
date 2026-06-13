@@ -20,7 +20,10 @@ normalization: logret_zscore  # [identity] pluggable shape definition
 # template source only ([identity] when signal_source: template; ignored by knn_shape).
 # Hand-drawn folklore shapes; LONG if the current window is within template_threshold
 # (Euclidean, in z-scored window space) of the nearest enabled pattern.
-template_patterns: [double_bottom, double_top, v_reversal, spike_top, bull_flag, head_shoulders, ascending]
+template_patterns: [double_bottom, triple_bottom, inverse_head_shoulders, rounding_bottom,
+                    cup_with_handle, v_reversal, double_top, triple_top, head_shoulders,
+                    spike_top, bull_flag, high_tight_flag, ascending_triangle,
+                    ascending, descending_triangle]
 template_threshold: 3.5    # [identity] placeholder — calibrate from train distance distribution
 
 enable_shorts: false      # [identity]

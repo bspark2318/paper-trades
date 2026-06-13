@@ -54,6 +54,41 @@ def test_distinct_templates_are_distinguishable():
     assert np.linalg.norm(db - dt) > 1.0      # bottom and top are not the same shape
 
 
+@pytest.mark.parametrize("name", list(TEMPLATES))
+def test_every_template_is_a_valid_unit_shape(name):
+    v = template_vector(TEMPLATES[name].anchors, W, "logret_zscore")
+    assert v.shape == (W,)
+    assert float(np.sum(v ** 2)) == pytest.approx(W, rel=1e-4)
+
+
+def test_no_opposite_direction_shapes_collide():
+    """Two templates with OPPOSITE directions must not sit so close in shape space
+    that a window between them flips long<->short on a coin-flip distance gap.
+    This is why wedges and the bear flag were excluded: their direction lives in
+    the high/low envelope, not the close line. Guards against silent regressions."""
+    names = list(TEMPLATES)
+    V = np.stack([template_vector(TEMPLATES[n].anchors, 30, "logret_zscore") for n in names])
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            if TEMPLATES[names[i]].direction is not TEMPLATES[names[j]].direction:
+                d = float(np.linalg.norm(V[i] - V[j]))
+                assert d >= 1.5, f"{names[i]} vs {names[j]} only {d:.2f} apart (opposite dirs)"
+
+
+@pytest.mark.parametrize("name", list(TEMPLATES))
+def test_every_template_self_matches(name):
+    """Plant each shape and confirm IT is the nearest — proves no two library
+    shapes are accidentally indistinguishable, and direction wiring is correct."""
+    bars = make_session_bars("2024-03-04", n_bars=30)
+    bars = plant_template_at_tail(bars, name)
+    src = make_source(tmpl_cfg(enable_shorts=True, template_threshold=5.0))
+    src.prepare(bars)
+    sig = src.signal_at(pd.Timestamp(bars["ts"].iloc[-1]))
+    assert sig.diagnostics["pattern"] == name
+    assert sig.diagnostics["distance"] < 1e-3
+    assert sig.direction is TEMPLATES[name].direction
+
+
 # ---------- signal_at ----------
 
 def test_exact_double_bottom_fires_long():

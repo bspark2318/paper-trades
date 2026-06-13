@@ -36,14 +36,41 @@ class Template:
 
 # The library. Anchor numbers are idealized folklore sketches, not fitted values —
 # the validation layer decides whether they pay, and rejection is the expected result.
+#
+# Shape selection guided by Bulkowski's measured failure-rank ordering (thepatternsite.com):
+# the classics traders treat as highest-signal that also render cleanly as a CLOSE path.
+# Bulkowski's rates are daily-bar / 5%-breakout over months and do NOT transfer to
+# 1-min/time-stop — they pick the shapes; our referee re-measures from scratch.
+#
+# Deliberately omitted, because a single close path cannot carry what defines them:
+#  - symmetric triangle: breaks either way, so it has no single direction to emit;
+#  - rectangles: a flat consolidation window is near-zero-variance, so z-scoring amplifies
+#    noise and the shape matches everything;
+#  - wedges (rising/falling) and bear flag: their bull/bear direction lives in the high/low
+#    ENVELOPE (sloping boundary lines), not the close line — as close paths a falling wedge
+#    is indistinguishable from a descending triangle, and a bear flag from a bottom's recovery,
+#    so they collide with OPPOSITE-direction patterns (<1.5 apart) and the trade direction
+#    becomes a coin flip. Same reason wicks need OHLC; these belong to k-NN(ohlc), not here.
 _TEMPLATES: tuple[Template, ...] = (
-    Template("double_bottom", (1.00, 0.62, 0.80, 0.60, 1.00), Direction.LONG),
-    Template("double_top",    (1.00, 1.38, 1.20, 1.40, 1.00), Direction.SHORT),
-    Template("v_reversal",    (1.00, 0.70, 0.45, 0.70, 1.00), Direction.LONG),
-    Template("spike_top",     (1.00, 1.30, 1.55, 1.30, 1.00), Direction.SHORT),
-    Template("bull_flag",     (0.55, 0.85, 1.05, 1.00, 0.97), Direction.LONG),
-    Template("head_shoulders", (1.00, 1.18, 1.02, 1.32, 1.02, 1.18, 0.92), Direction.SHORT),
-    Template("ascending",     (0.80, 0.86, 0.92, 0.97, 1.03), Direction.LONG),
+    # --- reversals: bottoms (bullish) ---
+    Template("double_bottom",          (1.00, 0.62, 0.80, 0.60, 1.00), Direction.LONG),
+    Template("triple_bottom",          (1.00, 0.60, 0.85, 0.60, 0.85, 0.60, 1.00), Direction.LONG),
+    Template("inverse_head_shoulders", (1.00, 0.82, 0.98, 0.68, 0.98, 0.82, 1.08), Direction.LONG),
+    Template("rounding_bottom",        (1.00, 0.70, 0.50, 0.42, 0.50, 0.70, 1.00), Direction.LONG),
+    Template("cup_with_handle",        (1.00, 0.62, 0.46, 0.52, 0.74, 0.96, 1.00, 0.90, 0.97), Direction.LONG),
+    Template("v_reversal",             (1.00, 0.70, 0.45, 0.70, 1.00), Direction.LONG),
+    # --- reversals: tops (bearish) ---
+    Template("double_top",             (1.00, 1.38, 1.20, 1.40, 1.00), Direction.SHORT),
+    Template("triple_top",             (1.00, 1.40, 1.15, 1.40, 1.15, 1.40, 1.00), Direction.SHORT),
+    Template("head_shoulders",         (1.00, 1.18, 1.02, 1.32, 1.02, 1.18, 0.92), Direction.SHORT),
+    Template("spike_top",              (1.00, 1.30, 1.55, 1.30, 1.00), Direction.SHORT),
+    # --- continuations (bullish) ---
+    Template("bull_flag",              (0.55, 0.85, 1.05, 1.00, 0.97), Direction.LONG),
+    Template("high_tight_flag",        (0.30, 0.68, 1.00, 1.05, 1.02, 1.05), Direction.LONG),
+    Template("ascending_triangle",     (0.50, 1.00, 0.72, 1.00, 0.86, 1.00, 0.95), Direction.LONG),
+    Template("ascending",             (0.80, 0.86, 0.92, 0.97, 1.03), Direction.LONG),
+    # --- continuations (bearish) ---
+    Template("descending_triangle",    (1.00, 0.50, 0.84, 0.50, 0.70, 0.50, 0.60), Direction.SHORT),
 )
 
 TEMPLATES: dict[str, Template] = {t.name: t for t in _TEMPLATES}

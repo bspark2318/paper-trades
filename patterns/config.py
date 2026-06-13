@@ -77,8 +77,10 @@ class Config:
     normalization: str = "logret_zscore"
     # template source knobs (ignored by knn_shape; see SOURCE_IDENTITY_FIELDS)
     template_patterns: tuple[str, ...] = (
-        "double_bottom", "double_top", "v_reversal",
-        "spike_top", "bull_flag", "head_shoulders", "ascending",
+        "double_bottom", "triple_bottom", "inverse_head_shoulders", "rounding_bottom",
+        "cup_with_handle", "v_reversal", "double_top", "triple_top", "head_shoulders",
+        "spike_top", "bull_flag", "high_tight_flag", "ascending_triangle",
+        "ascending", "descending_triangle",
     )
     template_threshold: float = 3.5
     enable_shorts: bool = False
