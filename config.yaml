@@ -1,0 +1,52 @@
+# All parameters live here — never hardcoded. Fields marked [identity] define the
+# config hash recorded in the multiple-testing ledger: changing one creates a new
+# config and raises the Bonferroni bar for everyone.
+
+signal_source: knn_shape  # [identity] which pattern definition emits signals; its declared
+                          #   fields below join the hash, others are ignored for that source
+symbols: [QQQ]            # [identity] single symbol by design; benchmark = buy-and-hold of it
+timeframe: 1Min           # [identity] bar size
+window: 30                # [identity] pattern window length, in bars (30 x 1Min = 30 minutes)
+horizon: 15               # [identity] forward-return horizon, in bars
+k: 100                    # [identity] nearest neighbours requested (before dedup)
+dedup_gap: 15             # [identity] matches within this many bars are one event
+p_threshold: 0.65         # [identity] min fraction of positive-match outcomes for a LONG
+t_multiplier: 1.5         # [identity] mean fwd return must beat this x unconditional mean
+min_matches: 20           # [identity] min deduped matches, else NO_TRADE
+min_history_bars: 35000   # [identity] warm-up before first walk-forward signal (~90 sessions)
+features: close           # [identity] close = line through closes; ohlc = full candles (4 values/bar)
+normalization: logret_zscore  # [identity] pluggable shape definition
+
+# template source only ([identity] when signal_source: template; ignored by knn_shape).
+# Hand-drawn folklore shapes. Every pattern within template_threshold (Euclidean, in
+# z-scored window space) votes; trade only if they unanimously agree on direction, else
+# NO_TRADE — so an ambiguous close path that matches both a long and a short shape abstains.
+template_patterns: [double_bottom, triple_bottom, inverse_head_shoulders, rounding_bottom,
+                    cup_with_handle, v_reversal, double_top, triple_top, head_shoulders,
+                    spike_top, bull_flag, high_tight_flag, ascending_triangle, falling_wedge,
+                    ascending, bear_flag, descending_triangle, rising_wedge]
+template_threshold: 3.5    # [identity] placeholder — calibrate from train distance distribution
+
+# candles source only ([identity] when signal_source: candles; ignored otherwise).
+# Candlestick anatomy (OHLC of 1-3 bars): wick/body folklore. A reversal only counts
+# in context — candle_trend_lookback bars must show the setup move (down before a bullish
+# pattern, up before a bearish one); set 0 for pure anatomy. Fired patterns must agree on
+# direction or the source abstains.
+candle_patterns: [hammer, shooting_star, bullish_engulfing, bearish_engulfing,
+                  piercing_line, dark_cloud_cover, morning_star, evening_star,
+                  three_white_soldiers, three_black_crows]
+candle_trend_lookback: 10  # [identity] bars of preceding trend a reversal requires; 0 = no context
+
+enable_shorts: false      # [identity]
+cost_bps: 5.0             # [identity] per side, deliberately pessimistic for intraday
+split_date: "2022-12-31"  # [identity] train <= this date < test
+query_stride: 1           # [identity] walk-forward queries every Nth bar
+
+# Execution plumbing — NOT part of the hypothesis, excluded from the config hash.
+position_size: 0.05       # fraction of paper equity per trade (one position at a time)
+force_flat_minutes_before_close: 5
+seed: 42                  # baselines randomness only; strategy itself is deterministic
+db_path: db/patterns.db
+reports_dir: reports
+block_size: 1024          # matcher GEMM query-block rows
+candidate_chunk: 65536    # matcher GEMM candidate-chunk columns
